@@ -1,0 +1,277 @@
+{
+  "entities": {
+    "GamerProfile": {
+      "title": "GamerProfile",
+      "description": "Public gamer profile with username, avatar, biography, online status, and discoverability flag (no PII).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the profile owner" },
+        "username": { "type": "string", "description": "Display gamertag (3-24 chars)" },
+        "usernameLower": { "type": "string", "description": "Lowercase gamertag for search" },
+        "bio": { "type": "string", "description": "Short biography (up to 240 chars)" },
+        "avatarData": { "type": "string", "description": "Preset key or compressed data URI avatar" },
+        "favoriteGame": { "type": "string", "description": "Primary game title" },
+        "onlineStatus": {
+          "type": "string",
+          "enum": ["online", "streaming", "in_call", "offline"],
+          "description": "Current gamer presence"
+        },
+        "discoverable": { "type": "boolean", "description": "Whether profile appears in user search" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["userId", "username", "usernameLower", "bio", "onlineStatus", "discoverable", "createdAt", "updatedAt"]
+    },
+    "LiveStream": {
+      "title": "LiveStream",
+      "description": "Global live broadcast session tagged with game category and searchable title.",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string", "description": "Broadcaster Firebase Auth UID" },
+        "hostUsername": { "type": "string", "description": "Broadcaster gamertag" },
+        "hostAvatarData": { "type": "string", "description": "Broadcaster avatar key or data URI" },
+        "title": { "type": "string", "description": "Stream broadcast title" },
+        "titleLower": { "type": "string", "description": "Lowercase stream title for search" },
+        "gameId": { "type": "string", "description": "Canonical game category ID" },
+        "gameTitle": { "type": "string", "description": "Game title being streamed" },
+        "gameTitleLower": { "type": "string", "description": "Lowercase game title for search" },
+        "categoryGenre": { "type": "string", "description": "Game genre label" },
+        "region": { "type": "string", "description": "Broadcast region label" },
+        "status": { "type": "string", "enum": ["live", "ended"], "description": "Broadcast lifecycle state" },
+        "viewerCount": { "type": "integer", "description": "Active viewer count" },
+        "micEnabled": { "type": "boolean", "description": "Whether broadcaster mic is active" },
+        "cameraEnabled": { "type": "boolean", "description": "Whether broadcaster camera is active" },
+        "voiceChannelEnabled": { "type": "boolean", "description": "Whether the audio-only viewer voice commentary room is open" },
+        "voiceTopic": { "type": "string", "description": "Optional voice commentary focus topic (e.g., Tactics & Feedback)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when stream started" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["hostId", "hostUsername", "title", "titleLower", "gameId", "gameTitle", "gameTitleLower", "categoryGenre", "region", "status", "viewerCount", "micEnabled", "cameraEnabled", "createdAt", "updatedAt"]
+    },
+    "StreamMessage": {
+      "title": "StreamMessage",
+      "description": "Live chat message or reaction inside a stream room.",
+      "type": "object",
+      "properties": {
+        "streamId": { "type": "string", "description": "Parent stream document ID" },
+        "senderId": { "type": "string", "description": "Author Firebase Auth UID" },
+        "senderUsername": { "type": "string", "description": "Author gamertag" },
+        "senderAvatarData": { "type": "string", "description": "Author avatar key or data URI" },
+        "text": { "type": "string", "description": "Chat message body or reaction label" },
+        "messageType": { "type": "string", "enum": ["chat", "reaction"], "description": "Message kind" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["streamId", "senderId", "senderUsername", "text", "messageType", "createdAt"]
+    },
+    "ViewerSignal": {
+      "title": "ViewerSignal",
+      "description": "WebRTC SDP and ICE signaling document between stream host and an individual viewer.",
+      "type": "object",
+      "properties": {
+        "streamId": { "type": "string" },
+        "hostId": { "type": "string" },
+        "viewerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["requesting", "connected", "closed"] },
+        "offerSdp": { "type": "string" },
+        "answerSdp": { "type": "string" },
+        "viewerCandidates": { "type": "array" },
+        "hostCandidates": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["streamId", "hostId", "viewerId", "status", "createdAt", "updatedAt"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Friend request or accepted friendship between two gamers keyed deterministically.",
+      "type": "object",
+      "properties": {
+        "requesterId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "requesterName": { "type": "string" },
+        "requesterAvatarData": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "recipientAvatarData": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requesterId", "recipientId", "requesterName", "recipientName", "memberUids", "status", "createdAt", "updatedAt"]
+    },
+    "VideoCall": {
+      "title": "VideoCall",
+      "description": "Peer-to-peer WebRTC gamer video call session with SDP and ICE signaling.",
+      "type": "object",
+      "properties": {
+        "callerId": { "type": "string" },
+        "calleeId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerAvatarData": { "type": "string" },
+        "calleeName": { "type": "string" },
+        "calleeAvatarData": { "type": "string" },
+        "participantUids": { "type": "array" },
+        "gameContext": { "type": "string" },
+        "status": { "type": "string", "enum": ["ringing", "active", "declined", "ended"] },
+        "offerSdp": { "type": "string" },
+        "answerSdp": { "type": "string" },
+        "callerCandidates": { "type": "array" },
+        "calleeCandidates": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callerId", "calleeId", "callerName", "calleeName", "participantUids", "status", "createdAt", "updatedAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Global competitive player ranking and win/loss record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarData": { "type": "string" },
+        "favoriteGame": { "type": "string" },
+        "wins": { "type": "integer" },
+        "losses": { "type": "integer" },
+        "rating": { "type": "integer" },
+        "currentStreak": { "type": "integer" },
+        "bestStreak": { "type": "integer" },
+        "listed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "username", "wins", "losses", "rating", "currentStreak", "bestStreak", "listed", "createdAt", "updatedAt"]
+    },
+    "MatchRecord": {
+      "title": "MatchRecord",
+      "description": "Immutable detailed match outcome and virtual Arena Points performance entry logged by a gamer.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "gameId": { "type": "string" },
+        "gameTitle": { "type": "string" },
+        "outcome": { "type": "string", "enum": ["win", "loss", "draw"] },
+        "opponentName": { "type": "string" },
+        "scoreSummary": { "type": "string" },
+        "myScore": { "type": "integer" },
+        "opponentScore": { "type": "integer" },
+        "matchMode": { "type": "string" },
+        "wagerPoints": { "type": "integer", "description": "Virtual Arena Points staked (non-monetary)" },
+        "payoutPoints": { "type": "integer", "description": "Virtual Arena Points returned (non-monetary)" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "username", "gameId", "gameTitle", "outcome", "createdAt"]
+    },
+    "SportHighlight": {
+      "title": "SportHighlight",
+      "description": "User-published sports gaming highlight clip card with play telemetry and hype count.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "authorAvatarData": { "type": "string" },
+        "gameId": { "type": "string" },
+        "gameTitle": { "type": "string" },
+        "sportLeague": { "type": "string" },
+        "title": { "type": "string" },
+        "playType": { "type": "string" },
+        "statLine": { "type": "string" },
+        "quarterOrTime": { "type": "string" },
+        "description": { "type": "string" },
+        "hypeCount": { "type": "integer" },
+        "hypedByUids": { "type": "array" },
+        "featured": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorUsername", "gameId", "gameTitle", "sportLeague", "title", "playType", "hypeCount", "hypedByUids", "featured", "createdAt", "updatedAt"]
+    },
+    "VoiceParticipant": {
+      "title": "VoiceParticipant",
+      "description": "Active streamer or viewer inside a stream's audio-only voice commentary channel.",
+      "type": "object",
+      "properties": {
+        "streamId": { "type": "string" },
+        "hostId": { "type": "string" },
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarData": { "type": "string" },
+        "role": { "type": "string", "enum": ["host", "commentator"] },
+        "focusTag": { "type": "string", "enum": ["Tactics", "Feedback", "Play-by-Play", "Co-Cast"] },
+        "muted": { "type": "boolean" },
+        "hostMuted": { "type": "boolean" },
+        "speakingStatus": { "type": "string", "enum": ["active", "muted", "left"] },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["streamId", "hostId", "userId", "username", "role", "focusTag", "muted", "hostMuted", "speakingStatus", "joinedAt", "updatedAt"]
+    },
+    "VoiceSignal": {
+      "title": "VoiceSignal",
+      "description": "Pairwise audio-only WebRTC SDP and ICE signaling between voice commentary participants.",
+      "type": "object",
+      "properties": {
+        "streamId": { "type": "string" },
+        "initiatorId": { "type": "string" },
+        "responderId": { "type": "string" },
+        "participantUids": { "type": "array" },
+        "status": { "type": "string", "enum": ["offering", "connected", "closed"] },
+        "offerSdp": { "type": "string" },
+        "answerSdp": { "type": "string" },
+        "initiatorCandidates": { "type": "array" },
+        "responderCandidates": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["streamId", "initiatorId", "responderId", "participantUids", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/gamer_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/GamerProfile" },
+      "description": "Public gamer profiles searchable by username"
+    },
+    "/streams/{streamId}": {
+      "schema": { "$ref": "#/entities/LiveStream" },
+      "description": "Global live streams browsable by game category or search"
+    },
+    "/streams/{streamId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/StreamMessage" },
+      "description": "Live chat messages and reactions in a stream"
+    },
+    "/streams/{streamId}/viewer_signals/{viewerId}": {
+      "schema": { "$ref": "#/entities/ViewerSignal" },
+      "description": "Per-viewer WebRTC signaling for live streams"
+    },
+    "/streams/{streamId}/voice_participants/{participantId}": {
+      "schema": { "$ref": "#/entities/VoiceParticipant" },
+      "description": "Roster of streamers and viewers in an audio-only commentary room"
+    },
+    "/streams/{streamId}/voice_signals/{signalId}": {
+      "schema": { "$ref": "#/entities/VoiceSignal" },
+      "description": "Audio-only WebRTC peer signaling for voice commentary participants"
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Friend requests and accepted friendships"
+    },
+    "/video_calls/{callId}": {
+      "schema": { "$ref": "#/entities/VideoCall" },
+      "description": "1-on-1 gamer WebRTC video call sessions"
+    },
+    "/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Global ranked player win/loss records"
+    },
+    "/match_records/{matchId}": {
+      "schema": { "$ref": "#/entities/MatchRecord" },
+      "description": "Personal match win/loss history log"
+    },
+    "/sport_highlights/{highlightId}": {
+      "schema": { "$ref": "#/entities/SportHighlight" },
+      "description": "Community sports highlight clips & play-of-the-game reels"
+    }
+  }
+}

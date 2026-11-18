@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">NexusCast</string>
+    <string name="tagline">Stream Anywhere. Squad Up Live.</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="nav_discover">Discover</string>
+    <string name="nav_sports">Sports</string>
+    <string name="nav_categories">Games</string>
+    <string name="nav_go_live">Go Live</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_leaderboard">Ranks</string>
+    <string name="nav_match_history">History</string>
+    <string name="nav_profile">Profile</string>
+    <string name="permission_camera_mic_title">Camera &amp; Mic Access Required</string>
+    <string name="permission_camera_mic_body">NexusCast uses your camera and microphone for live global streams and gamer video calls.</string>
+    <string name="grant_permissions">Enable Camera &amp; Mic</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+</resources>

@@ -1,0 +1,544 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidStringList(list, maxItems, maxItemLen) {
+      return list is list &&
+             list.size() <= maxItems &&
+             (list.size() == 0 || (list[0] is string && list[0].size() <= maxItemLen));
+    }
+
+    // Validation Helpers
+    function isValidGamerProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 24 &&
+             data.usernameLower is string && data.usernameLower.size() >= 3 && data.usernameLower.size() <= 24 &&
+             data.bio is string && data.bio.size() <= 240 &&
+             (!('avatarData' in data) || (data.avatarData is string && data.avatarData.size() <= 120000)) &&
+             (!('favoriteGame' in data) || (data.favoriteGame is string && data.favoriteGame.size() <= 60)) &&
+             data.onlineStatus in ['online', 'streaming', 'in_call', 'offline'] &&
+             data.discoverable is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStream(data) {
+      return data.hostId is string && data.hostId.size() >= 1 && data.hostId.size() <= 128 &&
+             data.hostUsername is string && data.hostUsername.size() >= 1 && data.hostUsername.size() <= 24 &&
+             (!('hostAvatarData' in data) || (data.hostAvatarData is string && data.hostAvatarData.size() <= 120000)) &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 100 &&
+             data.titleLower is string && data.titleLower.size() >= 3 && data.titleLower.size() <= 100 &&
+             data.gameId is string && data.gameId.size() >= 1 && data.gameId.size() <= 40 &&
+             data.gameTitle is string && data.gameTitle.size() >= 1 && data.gameTitle.size() <= 60 &&
+             data.gameTitleLower is string && data.gameTitleLower.size() >= 1 && data.gameTitleLower.size() <= 60 &&
+             data.categoryGenre is string && data.categoryGenre.size() >= 1 && data.categoryGenre.size() <= 30 &&
+             data.region is string && data.region.size() >= 1 && data.region.size() <= 30 &&
+             data.status in ['live', 'ended'] &&
+             data.viewerCount is int && data.viewerCount >= 0 && data.viewerCount <= 1000000 &&
+             data.micEnabled is bool &&
+             data.cameraEnabled is bool &&
+             (!('voiceChannelEnabled' in data) || (data.voiceChannelEnabled is bool)) &&
+             (!('voiceTopic' in data) || (data.voiceTopic is string && data.voiceTopic.size() <= 80)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStreamMessage(data) {
+      return data.streamId is string && data.streamId.size() >= 1 && data.streamId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderUsername is string && data.senderUsername.size() >= 1 && data.senderUsername.size() <= 24 &&
+             (!('senderAvatarData' in data) || (data.senderAvatarData is string && data.senderAvatarData.size() <= 120000)) &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 300 &&
+             data.messageType in ['chat', 'reaction'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidViewerSignal(data) {
+      return data.streamId is string && data.streamId.size() >= 1 && data.streamId.size() <= 128 &&
+             data.hostId is string && data.hostId.size() >= 1 && data.hostId.size() <= 128 &&
+             data.viewerId is string && data.viewerId.size() >= 1 && data.viewerId.size() <= 128 &&
+             data.status in ['requesting', 'connected', 'closed'] &&
+             (!('offerSdp' in data) || (data.offerSdp is string && data.offerSdp.size() <= 20000)) &&
+             (!('answerSdp' in data) || (data.answerSdp is string && data.answerSdp.size() <= 20000)) &&
+             (!('viewerCandidates' in data) || isValidStringList(data.viewerCandidates, 30, 1000)) &&
+             (!('hostCandidates' in data) || isValidStringList(data.hostCandidates, 30, 1000)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidFriendship(data) {
+      return data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128 &&
+             data.recipientId is string && data.recipientId.size() >= 1 && data.recipientId.size() <= 128 &&
+             data.requesterName is string && data.requesterName.size() >= 1 && data.requesterName.size() <= 24 &&
+             (!('requesterAvatarData' in data) || (data.requesterAvatarData is string && data.requesterAvatarData.size() <= 120000)) &&
+             data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 24 &&
+             (!('recipientAvatarData' in data) || (data.recipientAvatarData is string && data.recipientAvatarData.size() <= 120000)) &&
+             data.memberUids is list && data.memberUids.size() == 2 &&
+             data.requesterId in data.memberUids && data.recipientId in data.memberUids &&
+             data.status in ['pending', 'accepted', 'declined'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVideoCall(data) {
+      return data.callerId is string && data.callerId.size() >= 1 && data.callerId.size() <= 128 &&
+             data.calleeId is string && data.calleeId.size() >= 1 && data.calleeId.size() <= 128 &&
+             data.callerName is string && data.callerName.size() >= 1 && data.callerName.size() <= 24 &&
+             (!('callerAvatarData' in data) || (data.callerAvatarData is string && data.callerAvatarData.size() <= 120000)) &&
+             data.calleeName is string && data.calleeName.size() >= 1 && data.calleeName.size() <= 24 &&
+             (!('calleeAvatarData' in data) || (data.calleeAvatarData is string && data.calleeAvatarData.size() <= 120000)) &&
+             data.participantUids is list && data.participantUids.size() == 2 &&
+             data.callerId in data.participantUids && data.calleeId in data.participantUids &&
+             (!('gameContext' in data) || (data.gameContext is string && data.gameContext.size() <= 60)) &&
+             data.status in ['ringing', 'active', 'declined', 'ended'] &&
+             (!('offerSdp' in data) || (data.offerSdp is string && data.offerSdp.size() <= 20000)) &&
+             (!('answerSdp' in data) || (data.answerSdp is string && data.answerSdp.size() <= 20000)) &&
+             (!('callerCandidates' in data) || isValidStringList(data.callerCandidates, 30, 1000)) &&
+             (!('calleeCandidates' in data) || isValidStringList(data.calleeCandidates, 30, 1000)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 24 &&
+             (!('avatarData' in data) || (data.avatarData is string && data.avatarData.size() <= 120000)) &&
+             (!('favoriteGame' in data) || (data.favoriteGame is string && data.favoriteGame.size() <= 60)) &&
+             data.wins is int && data.wins >= 0 && data.wins <= 1000000 &&
+             data.losses is int && data.losses >= 0 && data.losses <= 1000000 &&
+             data.rating is int && data.rating >= 100 && data.rating <= 100000 &&
+             data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 1000000 &&
+             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 1000000 &&
+             data.listed is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidMatchRecord(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 24 &&
+             data.gameId is string && data.gameId.size() >= 1 && data.gameId.size() <= 40 &&
+             data.gameTitle is string && data.gameTitle.size() >= 1 && data.gameTitle.size() <= 60 &&
+             data.outcome in ['win', 'loss', 'draw'] &&
+             (!('opponentName' in data) || (data.opponentName is string && data.opponentName.size() <= 40)) &&
+             (!('scoreSummary' in data) || (data.scoreSummary is string && data.scoreSummary.size() <= 40)) &&
+             (!('myScore' in data) || (data.myScore is int && data.myScore >= 0 && data.myScore <= 9999)) &&
+             (!('opponentScore' in data) || (data.opponentScore is int && data.opponentScore >= 0 && data.opponentScore <= 9999)) &&
+             (!('matchMode' in data) || (data.matchMode is string && data.matchMode.size() <= 40)) &&
+             (!('wagerPoints' in data) || (data.wagerPoints is int && data.wagerPoints >= 0 && data.wagerPoints <= 1000000)) &&
+             (!('payoutPoints' in data) || (data.payoutPoints is int && data.payoutPoints >= 0 && data.payoutPoints <= 5000000)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 160)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidSportHighlight(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorUsername is string && data.authorUsername.size() >= 1 && data.authorUsername.size() <= 24 &&
+             (!('authorAvatarData' in data) || (data.authorAvatarData is string && data.authorAvatarData.size() <= 120000)) &&
+             data.gameId is string && data.gameId.size() >= 1 && data.gameId.size() <= 40 &&
+             data.gameTitle is string && data.gameTitle.size() >= 1 && data.gameTitle.size() <= 60 &&
+             data.sportLeague is string && data.sportLeague.size() >= 1 && data.sportLeague.size() <= 30 &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 100 &&
+             data.playType is string && data.playType.size() >= 1 && data.playType.size() <= 40 &&
+             (!('statLine' in data) || (data.statLine is string && data.statLine.size() <= 80)) &&
+             (!('quarterOrTime' in data) || (data.quarterOrTime is string && data.quarterOrTime.size() <= 30)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 300)) &&
+             data.hypeCount is int && data.hypeCount >= 0 && data.hypeCount <= 10000000 &&
+             isValidStringList(data.hypedByUids, 500, 128) &&
+             data.featured is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVoiceParticipant(data) {
+      return data.streamId is string && data.streamId.size() >= 1 && data.streamId.size() <= 128 &&
+             data.hostId is string && data.hostId.size() >= 1 && data.hostId.size() <= 128 &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 24 &&
+             (!('avatarData' in data) || (data.avatarData is string && data.avatarData.size() <= 120000)) &&
+             data.role in ['host', 'commentator'] &&
+             data.focusTag in ['Tactics', 'Feedback', 'Play-by-Play', 'Co-Cast'] &&
+             data.muted is bool &&
+             data.hostMuted is bool &&
+             data.speakingStatus in ['active', 'muted', 'left'] &&
+             data.joinedAt is timestamp && data.joinedAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVoiceSignal(data) {
+      return data.streamId is string && data.streamId.size() >= 1 && data.streamId.size() <= 128 &&
+             data.initiatorId is string && data.initiatorId.size() >= 1 && data.initiatorId.size() <= 128 &&
+             data.responderId is string && data.responderId.size() >= 1 && data.responderId.size() <= 128 &&
+             data.participantUids is list && data.participantUids.size() == 2 &&
+             data.initiatorId in data.participantUids && data.responderId in data.participantUids &&
+             data.status in ['offering', 'connected', 'closed'] &&
+             (!('offerSdp' in data) || (data.offerSdp is string && data.offerSdp.size() <= 20000)) &&
+             (!('answerSdp' in data) || (data.answerSdp is string && data.answerSdp.size() <= 20000)) &&
+             (!('initiatorCandidates' in data) || isValidStringList(data.initiatorCandidates, 30, 1000)) &&
+             (!('responderCandidates' in data) || isValidStringList(data.responderCandidates, 30, 1000)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 1. Public Gamer Profiles (zero PII)
+    match /gamer_profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn() && (existing().discoverable == true || existing().userId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'username', 'usernameLower', 'bio', 'onlineStatus', 'discoverable', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'username', 'usernameLower', 'bio', 'avatarData', 'favoriteGame', 'onlineStatus', 'discoverable', 'createdAt', 'updatedAt']) &&
+                       isValidGamerProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidGamerProfile(incoming()) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['username', 'usernameLower', 'bio', 'avatarData', 'favoriteGame', 'onlineStatus', 'discoverable', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // 2. Global Live Streams
+    match /streams/{streamId} {
+      allow get: if isSignedIn() && isValidId(streamId);
+      allow list: if isSignedIn() && (existing().status == 'live' || existing().hostId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(streamId) &&
+                       incoming().hostId == request.auth.uid &&
+                       incoming().status == 'live' &&
+                       incoming().keys().hasAll(['hostId', 'hostUsername', 'title', 'titleLower', 'gameId', 'gameTitle', 'gameTitleLower', 'categoryGenre', 'region', 'status', 'viewerCount', 'micEnabled', 'cameraEnabled', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['hostId', 'hostUsername', 'hostAvatarData', 'title', 'titleLower', 'gameId', 'gameTitle', 'gameTitleLower', 'categoryGenre', 'region', 'status', 'viewerCount', 'micEnabled', 'cameraEnabled', 'voiceChannelEnabled', 'voiceTopic', 'createdAt', 'updatedAt']) &&
+                       isValidStream(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(streamId) &&
+                       isValidStream(incoming()) &&
+                       existing().status == 'live' &&
+                       incoming().hostId == existing().hostId &&
+                       incoming().createdAt == existing().createdAt && (
+                         (request.auth.uid == existing().hostId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['hostUsername', 'hostAvatarData', 'title', 'titleLower', 'gameId', 'gameTitle', 'gameTitleLower', 'categoryGenre', 'region', 'status', 'viewerCount', 'micEnabled', 'cameraEnabled', 'voiceChannelEnabled', 'voiceTopic', 'updatedAt'])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['viewerCount', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(streamId) && existing().hostId == request.auth.uid;
+
+      // 2a. Stream Live Chat & Reactions
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(streamId) && isValidId(messageId);
+        allow list: if isSignedIn() && existing().streamId == streamId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(messageId) &&
+                         incoming().senderId == request.auth.uid &&
+                         incoming().streamId == streamId &&
+                         incoming().keys().hasAll(['streamId', 'senderId', 'senderUsername', 'text', 'messageType', 'createdAt']) &&
+                         incoming().keys().hasOnly(['streamId', 'senderId', 'senderUsername', 'senderAvatarData', 'text', 'messageType', 'createdAt']) &&
+                         isValidStreamMessage(incoming()) &&
+                         exists(/databases/$(database)/documents/streams/$(streamId));
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(streamId) && isValidId(messageId) && existing().senderId == request.auth.uid;
+      }
+
+      // 2b. Per-Viewer WebRTC Signaling
+      match /viewer_signals/{viewerId} {
+        allow get: if isSignedIn() && isValidId(streamId) && isValidId(viewerId) &&
+                      (request.auth.uid == viewerId || existing().hostId == request.auth.uid);
+        allow list: if isSignedIn() && existing().hostId == request.auth.uid;
+
+        allow create: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(viewerId) &&
+                         request.auth.uid == viewerId &&
+                         incoming().viewerId == request.auth.uid &&
+                         incoming().streamId == streamId &&
+                         incoming().keys().hasAll(['streamId', 'hostId', 'viewerId', 'status', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['streamId', 'hostId', 'viewerId', 'status', 'offerSdp', 'answerSdp', 'viewerCandidates', 'hostCandidates', 'createdAt', 'updatedAt']) &&
+                         isValidViewerSignal(incoming()) &&
+                         get(/databases/$(database)/documents/streams/$(streamId)).data.hostId == incoming().hostId;
+
+        allow update: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(viewerId) &&
+                         isValidViewerSignal(incoming()) &&
+                         incoming().streamId == existing().streamId &&
+                         incoming().hostId == existing().hostId &&
+                         incoming().viewerId == existing().viewerId &&
+                         incoming().createdAt == existing().createdAt && (
+                           (request.auth.uid == viewerId &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['offerSdp', 'viewerCandidates', 'status', 'updatedAt'])) ||
+                           (request.auth.uid == existing().hostId &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['answerSdp', 'hostCandidates', 'status', 'updatedAt']))
+                         );
+
+        allow delete: if isSignedIn() && isValidId(streamId) && isValidId(viewerId) &&
+                         (request.auth.uid == viewerId || existing().hostId == request.auth.uid);
+      }
+
+      // 2c. Audio-Only Voice Commentary Participants
+      match /voice_participants/{participantId} {
+        allow get: if isSignedIn() && isValidId(streamId) && isValidId(participantId);
+        allow list: if isSignedIn() && existing().streamId == streamId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(participantId) &&
+                         request.auth.uid == participantId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().streamId == streamId &&
+                         incoming().hostMuted == false &&
+                         incoming().keys().hasAll(['streamId', 'hostId', 'userId', 'username', 'role', 'focusTag', 'muted', 'hostMuted', 'speakingStatus', 'joinedAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['streamId', 'hostId', 'userId', 'username', 'avatarData', 'role', 'focusTag', 'muted', 'hostMuted', 'speakingStatus', 'joinedAt', 'updatedAt']) &&
+                         isValidVoiceParticipant(incoming()) &&
+                         get(/databases/$(database)/documents/streams/$(streamId)).data.hostId == incoming().hostId &&
+                         (
+                           (request.auth.uid == incoming().hostId && incoming().role == 'host') ||
+                           (incoming().role == 'commentator' &&
+                            (!('voiceChannelEnabled' in get(/databases/$(database)/documents/streams/$(streamId)).data) ||
+                             get(/databases/$(database)/documents/streams/$(streamId)).data.voiceChannelEnabled == true))
+                         );
+
+        allow update: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(participantId) &&
+                         isValidVoiceParticipant(incoming()) &&
+                         incoming().streamId == existing().streamId &&
+                         incoming().hostId == existing().hostId &&
+                         incoming().userId == existing().userId &&
+                         incoming().role == existing().role &&
+                         incoming().joinedAt == existing().joinedAt && (
+                           (request.auth.uid == participantId &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatarData', 'focusTag', 'muted', 'speakingStatus', 'updatedAt']) &&
+                            (existing().hostMuted == false || (incoming().muted == true && incoming().speakingStatus == 'muted'))) ||
+                           (request.auth.uid == existing().hostId &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['muted', 'hostMuted', 'speakingStatus', 'updatedAt']))
+                         );
+
+        allow delete: if isSignedIn() && isValidId(streamId) && isValidId(participantId) &&
+                         (request.auth.uid == participantId || existing().hostId == request.auth.uid);
+      }
+
+      // 2d. Pairwise Audio-Only WebRTC Voice Commentary Signaling
+      match /voice_signals/{signalId} {
+        allow get: if isSignedIn() && isValidId(streamId) && isValidId(signalId) &&
+                      existing().streamId == streamId &&
+                      request.auth.uid in existing().participantUids;
+        allow list: if isSignedIn() && existing().streamId == streamId &&
+                       request.auth.uid in existing().participantUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(signalId) &&
+                         incoming().initiatorId == request.auth.uid &&
+                         incoming().responderId != request.auth.uid &&
+                         incoming().streamId == streamId &&
+                         incoming().status == 'offering' &&
+                         incoming().keys().hasAll(['streamId', 'initiatorId', 'responderId', 'participantUids', 'status', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['streamId', 'initiatorId', 'responderId', 'participantUids', 'status', 'offerSdp', 'answerSdp', 'initiatorCandidates', 'responderCandidates', 'createdAt', 'updatedAt']) &&
+                         isValidVoiceSignal(incoming()) &&
+                         exists(/databases/$(database)/documents/streams/$(streamId));
+
+        allow update: if isSignedIn() &&
+                         isValidId(streamId) &&
+                         isValidId(signalId) &&
+                         isValidVoiceSignal(incoming()) &&
+                         incoming().streamId == existing().streamId &&
+                         incoming().initiatorId == existing().initiatorId &&
+                         incoming().responderId == existing().responderId &&
+                         incoming().participantUids == existing().participantUids &&
+                         incoming().createdAt == existing().createdAt && (
+                           (request.auth.uid == existing().initiatorId &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['offerSdp', 'initiatorCandidates', 'status', 'updatedAt'])) ||
+                           (request.auth.uid == existing().responderId &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['answerSdp', 'responderCandidates', 'status', 'updatedAt']))
+                         );
+
+        allow delete: if isSignedIn() && isValidId(streamId) && isValidId(signalId) &&
+                         request.auth.uid in existing().participantUids;
+      }
+    }
+
+    // 3. Friend Requests & Friendships
+    match /friendships/{friendshipId} {
+      allow get: if isSignedIn() && isValidId(friendshipId) && request.auth.uid in existing().memberUids;
+      allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+
+      allow create: if isSignedIn() &&
+                       isValidId(friendshipId) &&
+                       incoming().requesterId == request.auth.uid &&
+                       incoming().recipientId != request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       incoming().keys().hasAll(['requesterId', 'recipientId', 'requesterName', 'recipientName', 'memberUids', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['requesterId', 'recipientId', 'requesterName', 'requesterAvatarData', 'recipientName', 'recipientAvatarData', 'memberUids', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidFriendship(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(friendshipId) &&
+                       isValidFriendship(incoming()) &&
+                       request.auth.uid in existing().memberUids &&
+                       incoming().requesterId == existing().requesterId &&
+                       incoming().recipientId == existing().recipientId &&
+                       incoming().memberUids == existing().memberUids &&
+                       incoming().createdAt == existing().createdAt && (
+                         (existing().status == 'pending' &&
+                          request.auth.uid == existing().recipientId &&
+                          incoming().status in ['accepted', 'declined'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'recipientName', 'recipientAvatarData', 'updatedAt'])) ||
+                         (existing().status == 'declined' &&
+                          request.auth.uid == existing().requesterId &&
+                          incoming().status == 'pending' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'requesterName', 'requesterAvatarData', 'updatedAt'])) ||
+                         (existing().status == 'accepted' &&
+                          incoming().status == 'accepted' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['requesterName', 'requesterAvatarData', 'recipientName', 'recipientAvatarData', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(friendshipId) && request.auth.uid in existing().memberUids;
+    }
+
+    // 4. 1-on-1 Gamer Video Calls
+    match /video_calls/{callId} {
+      allow get: if isSignedIn() && isValidId(callId) && request.auth.uid in existing().participantUids;
+      allow list: if isSignedIn() && request.auth.uid in existing().participantUids;
+
+      allow create: if isSignedIn() &&
+                       isValidId(callId) &&
+                       incoming().callerId == request.auth.uid &&
+                       incoming().calleeId != request.auth.uid &&
+                       incoming().status == 'ringing' &&
+                       incoming().keys().hasAll(['callerId', 'calleeId', 'callerName', 'calleeName', 'participantUids', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['callerId', 'calleeId', 'callerName', 'callerAvatarData', 'calleeName', 'calleeAvatarData', 'participantUids', 'gameContext', 'status', 'offerSdp', 'answerSdp', 'callerCandidates', 'calleeCandidates', 'createdAt', 'updatedAt']) &&
+                       isValidVideoCall(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(callId) &&
+                       isValidVideoCall(incoming()) &&
+                       request.auth.uid in existing().participantUids &&
+                       incoming().callerId == existing().callerId &&
+                       incoming().calleeId == existing().calleeId &&
+                       incoming().participantUids == existing().participantUids &&
+                       incoming().createdAt == existing().createdAt &&
+                       existing().status in ['ringing', 'active'] && (
+                         (existing().status == 'ringing' &&
+                          request.auth.uid == existing().calleeId &&
+                          incoming().status in ['active', 'declined'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'answerSdp', 'calleeCandidates', 'updatedAt'])) ||
+                         (request.auth.uid == existing().callerId &&
+                          incoming().status in [existing().status, 'ended'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['offerSdp', 'callerCandidates', 'status', 'updatedAt'])) ||
+                         (request.auth.uid == existing().calleeId &&
+                          incoming().status in [existing().status, 'ended'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['calleeCandidates', 'status', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(callId) && request.auth.uid in existing().participantUids;
+    }
+
+    // 5. Global Competitive Leaderboard
+    match /leaderboard/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn() && (existing().listed == true || existing().userId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().wins <= 1 &&
+                       incoming().losses <= 1 &&
+                       (incoming().wins + incoming().losses) <= 1 &&
+                       incoming().keys().hasAll(['userId', 'username', 'wins', 'losses', 'rating', 'currentStreak', 'bestStreak', 'listed', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'username', 'avatarData', 'favoriteGame', 'wins', 'losses', 'rating', 'currentStreak', 'bestStreak', 'listed', 'createdAt', 'updatedAt']) &&
+                       isValidLeaderboardEntry(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidLeaderboardEntry(incoming()) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatarData', 'favoriteGame', 'wins', 'losses', 'rating', 'currentStreak', 'bestStreak', 'listed', 'updatedAt']) && (
+                         (incoming().wins == existing().wins && incoming().losses == existing().losses) ||
+                         (incoming().wins == existing().wins + 1 && incoming().losses == existing().losses) ||
+                         (incoming().losses == existing().losses + 1 && incoming().wins == existing().wins)
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // 6. Personal Match Win/Loss & Virtual Points History Records
+    match /match_records/{matchId} {
+      allow get: if isSignedIn() && isValidId(matchId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(matchId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'username', 'gameId', 'gameTitle', 'outcome', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'username', 'gameId', 'gameTitle', 'outcome', 'opponentName', 'scoreSummary', 'myScore', 'opponentScore', 'matchMode', 'wagerPoints', 'payoutPoints', 'notes', 'createdAt']) &&
+                       isValidMatchRecord(incoming());
+
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(matchId) && existing().userId == request.auth.uid;
+    }
+
+    // 7. Sports Gaming Highlights & Reels
+    match /sport_highlights/{highlightId} {
+      allow get: if isSignedIn() && isValidId(highlightId);
+      allow list: if isSignedIn() && (existing().featured == true || existing().authorId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(highlightId) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().hypeCount == 0 &&
+                       incoming().hypedByUids.size() == 0 &&
+                       incoming().keys().hasAll(['authorId', 'authorUsername', 'gameId', 'gameTitle', 'sportLeague', 'title', 'playType', 'hypeCount', 'hypedByUids', 'featured', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['authorId', 'authorUsername', 'authorAvatarData', 'gameId', 'gameTitle', 'sportLeague', 'title', 'playType', 'statLine', 'quarterOrTime', 'description', 'hypeCount', 'hypedByUids', 'featured', 'createdAt', 'updatedAt']) &&
+                       isValidSportHighlight(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(highlightId) &&
+                       isValidSportHighlight(incoming()) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().createdAt == existing().createdAt && (
+                         (request.auth.uid == existing().authorId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['authorUsername', 'authorAvatarData', 'title', 'playType', 'statLine', 'quarterOrTime', 'description', 'featured', 'updatedAt'])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['hypeCount', 'hypedByUids', 'updatedAt']) &&
+                          incoming().hypeCount >= existing().hypeCount - 1 &&
+                          incoming().hypeCount <= existing().hypeCount + 1)
+                       );
+
+      allow delete: if isSignedIn() && isValidId(highlightId) && existing().authorId == request.auth.uid;
+    }
+  }
+}
